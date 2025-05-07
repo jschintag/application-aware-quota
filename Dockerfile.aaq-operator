@@ -1,5 +1,6 @@
 # Builder stage
-FROM docker.io/library/golang:1.22-alpine as builder
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.22-alpine AS builder
 
 
 # Install make
@@ -17,8 +18,10 @@ COPY Makefile /workdir/app/Makefile
 
 WORKDIR /workdir/app
 
-RUN make aaq_operator
-RUN make csv-generator
+ARG TARGETARCH
+
+RUN GOARCH="${TARGETARCH}" make aaq_operator
+RUN GOARCH="${TARGETARCH}" make csv-generator
 
 # Final stage
 FROM docker.io/library/golang:1.22-alpine

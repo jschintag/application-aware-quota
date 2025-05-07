@@ -1,5 +1,6 @@
 # Builder stage
-FROM docker.io/library/golang:1.22-alpine as builder
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.22-alpine AS builder
 
 # Install make
 RUN apk update && apk add make
@@ -13,7 +14,9 @@ COPY Makefile /workdir/app/Makefile
 
 WORKDIR /workdir/app
 
-RUN make label_sidecar
+ARG TARGETARCH
+
+RUN GOARCH="${TARGETARCH}" make label_sidecar
 
 # Final stage
 FROM docker.io/library/golang:1.22-alpine

@@ -93,19 +93,19 @@ bootstrap-ginkgo:
 	${DO_BAZ} ./hack/build/bootstrap-ginkgo.sh
 
 aaq_controller:
-	go build -o aaq_controller -v cmd/aaq-controller/*.go
+	CGO_ENABLED=0 go build -o aaq_controller -v cmd/aaq-controller/*.go
 	chmod 777 aaq_controller
 
 aaq_operator:
-	go build -o aaq_operator -v cmd/aaq-operator/*.go
+	CGO_ENABLED=0 go build -o aaq_operator -v cmd/aaq-operator/*.go
 	chmod 777 aaq_operator
 
 aaq_server:
-	go build -o aaq_server -v cmd/aaq-server/*.go
+	CGO_ENABLED=0 go build -o aaq_server -v cmd/aaq-server/*.go
 	chmod 777 aaq_server
 
 csv-generator:
-	go build -o bin/csv-generator -v tools/csv-generator/csv-generator.go
+	CGO_ENABLED=0 go build -o bin/csv-generator -v tools/csv-generator/csv-generator.go
 	chmod 777 bin/csv-generator
 
 release-description:

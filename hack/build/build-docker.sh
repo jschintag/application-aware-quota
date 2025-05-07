@@ -27,49 +27,59 @@ if ! command -v docker &> /dev/null && ! command -v podman &> /dev/null; then
     exit 1
 fi
 
-cri_cmd=""
-insecure=""
-if command -v podman &> /dev/null; then
-    cri_cmd="podman"
-    insecure="--tls-verify=false"
-else
-    cri_cmd="docker"
-fi
+build_container() {
+    local BIN_NAME="${1}"
+    local ARCH="${2}"
+    local IMAGE="${DOCKER_PREFIX}/${BIN_NAME}:${DOCKER_TAG}"
+    local platform=""
+    if [ "${ARCH}" != "" ]; then
+        IMAGE="${IMAGE}-${ARCH}"
+        platform="--platform linux/${ARCH}"
+    fi
+
+    if [ "${opt}" == "build" ]; then
+        (
+            pwd
+            ${AAQ_CRI} build ${platform} -t ${IMAGE} . -f Dockerfile.${BIN_NAME}
+        )
+    elif [ "${opt}" == "push" ] || [ "${opt}" == "publish" ]; then
+        ${AAQ_CRI} push "${IMAGE}"
+    fi
+}
+
+multiarch() {
+    local BIN_NAME="${1}"
+    local IMAGE="${DOCKER_PREFIX}/${BIN_NAME}:${DOCKER_TAG}"
+    local tmp_images=""
+    local build_count=$(echo "${BUILD_ARCH//,/ }" | wc -w)
+
+    if [ "${build_count}" -gt 1 ]; then
+        for arch in ${BUILD_ARCH//,/ }; do
+            build_container "${BIN_NAME}" "${arch}"
+            tmp_images="${tmp_images} ${IMAGE}-${arch}"
+        done
+
+        if [ "${opt}" == "push" ] || [ "${opt}" == "publish" ]; then
+            export DOCKER_CLI_EXPERIMENTAL=enabled
+            ${AAQ_CRI} manifest create --amend "${IMAGE}" ${tmp_images}
+            ${AAQ_CRI} manifest push ${IMAGE}
+        fi
+    else
+        build_container "${BIN_NAME}"
+    fi
+}
 
 PUSH_TARGETS=(${PUSH_TARGETS:-$CONTROLLER_IMAGE_NAME $AAQ_SERVER_IMAGE_NAME $OPERATOR_IMAGE_NAME})
-echo "Using ${cri_cmd}, docker_prefix: $DOCKER_PREFIX, docker_tag: $DOCKER_TAG"
+echo "Using ${AAQ_CRI}, docker_prefix: $DOCKER_PREFIX, docker_tag: $DOCKER_TAG"
 for target in ${PUSH_TARGETS[@]}; do
-    BIN_NAME="${target}"
-    IMAGE="${DOCKER_PREFIX}/${BIN_NAME}:${DOCKER_TAG}"
-
-    if [ "${opt}" == "build" ]; then
-        (
-            pwd
-            ${cri_cmd} "${opt}" -t ${IMAGE} . -f Dockerfile.${BIN_NAME}
-        )
-    elif [ "${opt}" == "push" ]; then
-        ${cri_cmd} "${opt}" ${insecure} "${IMAGE}"
-    elif [ "${opt}" == "publish" ]; then
-        ${cri_cmd} push ${insecure} ${IMAGE}
-    fi
+    multiarch "${target}"
 done
 
-cd example_sidecars
+pushd example_sidecars
 PUSH_EXAMPLE_SIDECARS=("$LABEL_SIDECAR_IMAGE_NAME")
 for target in ${PUSH_EXAMPLE_SIDECARS[@]}; do
-    cd ${target}
-    BIN_NAME="${target}"
-    IMAGE="${DOCKER_PREFIX}/${BIN_NAME}:${DOCKER_TAG}"
-
-    if [ "${opt}" == "build" ]; then
-        (
-            pwd
-            ${cri_cmd} "${opt}" -t ${IMAGE} . -f Dockerfile.${BIN_NAME}
-        )
-    elif [ "${opt}" == "push" ]; then
-        ${cri_cmd} "${opt}" ${insecure} "${IMAGE}"
-    elif [ "${opt}" == "publish" ]; then
-        ${cri_cmd} push ${insecure} ${IMAGE}
-    fi
-    cd ..
+    pushd ${target}
+    multiarch "${target}"
+    popd
 done
+popd
